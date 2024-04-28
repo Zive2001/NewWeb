@@ -1,0 +1,63 @@
+CREATE TYPE Empl_typ AS OBJECT( 
+empNo INT, 
+empName VARCHAR2(50), 
+salary FLOAT, 
+designation VARCHAR2(50) 
+); 
+CREATE OR REPLACE TYPE Member_typ AS OBJECT( 
+team_member REF Empl_typ 
+); 
+CREATE TYPE Member_nt AS TABLE OF Member_typ; 
+CREATE TYPE Project_typ AS OBJECT( 
+projNo INT, 
+pname VARCHAR2(50), 
+members Member_nt, 
+mgr REF Empl_typ, 
+MEMBER FUNCTION Budget RETURN FLOAT 
+); 
+CREATE TABLE Employees OF Empl_typ(PRIMARY KEY(empNo)); 
+CREATE TABLE Projects OF Project_typ(PRIMARY KEY (projNo), mgr REFERENCES Employees) 
+NESTED TABLE members STORE AS member_tab; 
+INSERT INTO Employees VALUES (1, 'Sarath', 10000.0, 'Technician'); 
+INSERT INTO Employees VALUES (2, 'Sampath', 12000.0, 'Sales Officer'); 
+INSERT INTO Employees VALUES (3, 'Viraj', 18000.0, 'Software Developer'); 
+INSERT INTO Employees VALUES (4, 'Tusith', 22000.0, 'Director'); 
+INSERT INTO Employees VALUES (5, 'Nimali', 15000.0, 'Technician'); 
+INSERT INTO Projects VALUES (10, 'Cabling Project', 
+member_nt( 
+Member_typ((select ref(e) from Employees e where e.empNo=1)), 
+Member_typ((select ref(e) from Employees e where e.empNo=5)) 
+), null); 
+INSERT INTO Projects VALUES (12, 'Data Warehousing Proj', 
+member_nt( 
+Member_typ((select ref(e) from Employees e where e.empNo=2)), 
+Member_typ((select ref(e) from Employees e where e.empNo=3)), 
+Member_typ((select ref(e) from Employees e where e.empNo=4)) 
+), 
+(select ref(e) from Employees e where e.empNo=2) 
+);
+
+
+SELECT p.projNo, p.pname, m.salary AS manager_salary
+FROM Projects p
+JOIN Employees m ON p.mgr = REF(m)
+ORDER BY m.salary DESC;
+
+
+CREATE OR REPLACE TYPE Project_typ AS OBJECT( 
+    projNo INT, 
+    pname VARCHAR2(50), 
+    members Member_nt, 
+    mgr REF Empl_typ, 
+    MEMBER FUNCTION Budget RETURN FLOAT
+) AS 
+    MEMBER FUNCTION Budget RETURN FLOAT IS
+        total_salary FLOAT := 0;
+    BEGIN
+        FOR i IN 1..self.members.count LOOP
+            SELECT DEREF(self.members(i).team_member).salary INTO total_salary
+            FROM dual;
+        END LOOP;
+        RETURN total_salary;
+    END;
+/
