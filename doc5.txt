@@ -1,0 +1,102 @@
+-- doc05
+
+CREATE TYPE Account_t_IS1 AS OBJECT ( 
+accNo INTEGER, 
+accName VARCHAR2(50), 
+balance FLOAT 
+) NOT FINAL NOT INSTANTIABLE; 
+/ 
+    
+CREATE TYPE Savings_t_IS1 UNDER Account_t_IS1 ( 
+interest_rate FLOAT 
+); 
+/ 
+    
+CREATE TYPE Current_t_IS1 UNDER Account_t_IS1 ( 
+No_cheques_issued INTEGER 
+); 
+/ 
+CREATE TYPE Account_Ref_t_IS1 AS OBJECT ( 
+account REF Account_t_IS1 
+); 
+/ 
+    
+CREATE TYPE Account_Ref_tbl AS TABLE OF Account_Ref_t_IS1; 
+/ 
+    
+CREATE TYPE Customer_t_IS1 AS OBJECT ( 
+nic CHAR(10), 
+name VARCHAR2(50), 
+accounts Account_Ref_tbl  
+);  
+/ 
+    
+CREATE TABLE Accounts_IS1 OF Account_t_IS1 (PRIMARY KEY(accNo)); 
+
+CREATE TABLE Customers_IS1 OF Customer_t_IS1 (PRIMARY KEY (nic)) NESTED TABLE accounts 
+STORE AS st_acc_tbl; 
+
+INSERT INTO Accounts_IS1 VALUES (Savings_t_IS1(10, 'Ran Surakum', 1000000, 4.5)); 
+INSERT INTO Accounts_IS1 VALUES (Current_t_IS1(4, 'Normal Checking', 23490.0, 156)); 
+INSERT INTO Accounts_IS1 VALUES (Savings_t_IS1(2, 'Ran Surakum', 12000, 4.5)); 
+INSERT INTO Accounts_IS1 VALUES (Current_t_IS1(12, 'Business Account', 234521.33, 1347)); 
+
+INSERT INTO Customers_IS1 VALUES ('1234567890', 'Mr. Suraweeraratne',  
+Account_Ref_tbl ( 
+Account_Ref_t_IS1((select REF(a1) from Accounts_IS1 a1 where a1.accNo = 10)), 
+Account_Ref_t_IS1((select REF(a2) from Accounts_IS1 a2 where a2.accNo = 4)) 
+) 
+); 
+INSERT INTO Customers_IS1 VALUES ('1232267890', 'Mr. Peiris', 
+Account_Ref_tbl( 
+Account_Ref_t_IS1((select REF(a) from Accounts_IS1 a where a.accNo = 2)) 
+) 
+); 
+INSERT INTO Customers_IS1 VALUES ('1232288890', 'Mr. Wijetunga', 
+Account_Ref_tbl( 
+Account_Ref_t_IS1((select REF(a) from Accounts_IS1 a where a.accNo = 12)) 
+) 
+); 
+
+
+Question 01: 
+-- Get Customer name and nic of customers with atleast one account. 
+SELECT nic, name 
+FROM Customers_IS1 c 
+WHERE EXISTS (SELECT 1 FROM TABLE(c.accounts));
+
+-- Question 02:  
+CREATE OR REPLACE FUNCTION calculate_total_min_balance(accNo_param INTEGER)
+RETURN FLOAT
+IS
+    total_min_balance FLOAT := 0;
+BEGIN
+    SELECT SUM(CASE
+                   WHEN accNo = accNo_param AND balance > 0 THEN balance
+                   ELSE 0
+               END)
+    INTO total_min_balance
+    FROM Accounts_IS1;
+
+    RETURN total_min_balance;
+END;
+/
+
+DECLARE
+    total_min_bal FLOAT;
+BEGIN
+    total_min_bal := calculate_total_min_balance(10); -- Example: passing account number 10
+    DBMS_OUTPUT.PUT_LINE('Total minimum balance for account 10: ' || total_min_bal);
+END;
+/
+
+
+    
+-- Question 03: 
+SELECT c.name AS customer_name, 
+       MIN(a.balance) AS minimum_balance
+FROM Customers_IS1 c
+JOIN TABLE(c.accounts) ac ON (1=1)
+JOIN Accounts_IS1 a ON (ac.account.accNo = a.accNo)
+GROUP BY c.name
+ORDER BY minimum_balance DESC;
